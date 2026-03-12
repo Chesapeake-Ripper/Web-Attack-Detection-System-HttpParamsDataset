@@ -1,0 +1,159 @@
+{% extends "base.html" %}{% block title %}统计看板{% endblock %}
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <div class="pg-hdr mb-4">
+    <h1><i class="bi bi-bar-chart-line"></i> 统计看板</h1>
+    <p>全局检测数据统计与可视化</p>
+  </div>
+
+  <!-- KPI -->
+  <div class="row g-3 mb-4">
+    {% for val,lbl,icon,cls in [
+      (total,       '总检测次数', 'bi-activity',           ''),
+      (normal,      '正常流量',   'bi-shield-check',       'kpi-green'),
+      (attack,      '攻击流量',   'bi-shield-exclamation', 'kpi-red'),
+      (attack_rate|string+'%','攻击检出率','bi-percent',   'kpi-orange'),
+    ] %}
+    <div class="col-6 col-lg-3">
+      <div class="kpi-card {{cls}}">
+        <i class="bi {{icon}} kpi-ico"></i>
+        <div class="kpi-val">{{val}}</div>
+        <div class="kpi-lbl">{{lbl}}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if total == 0 %}
+  <div class="wad-card">
+    <div class="p-5 text-center">
+      <div style="font-size:3rem">📊</div>
+      <div class="empty-title mt-3">暂无数据</div>
+      <div class="empty-sub">先进行一些检测</div>
+      <a href="{{ url_for('pages.index') }}" class="btn wad-btn mt-3">开始检测</a>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="row g-4 mb-4">
+    <!-- 饼图 -->
+    <div class="col-lg-4">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-pie-chart me-2"></i>攻击类型分布</div>
+        <div class="p-3">
+          <div style="height:210px"><canvas id="pieChart"></canvas></div>
+          {% set cn={'norm':'正常流量','sqli':'SQL注入','xss':'XSS攻击','cmdi':'命令注入','path-traversal':'路径穿越'} %}
+          <div class="mt-3">
+            {% for lbl,cnt in by_label %}
+            <div class="d-flex justify-content-between mb-1">
+              <span class="badge bdg-{{lbl}}">{{cn.get(lbl,lbl)}}</span>
+              <span style="font-family:var(--mono);font-size:.8rem;color:var(--muted)">{{cnt}}</span>
+            </div>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 趋势折线图 -->
+    <div class="col-lg-5">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-graph-up me-2"></i>近 7 天趋势</div>
+        <div class="p-3"><div style="height:270px"><canvas id="trendChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- 模型柱图 -->
+    <div class="col-lg-3">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-cpu me-2"></i>模型使用分布</div>
+        <div class="p-3">
+          <div style="height:210px"><canvas id="modelChart"></canvas></div>
+          <div class="mt-3">
+            {% for m,cnt in by_model %}
+            <div class="d-flex justify-content-between mb-1">
+              <span class="badge bg-secondary">{{m}}</span>
+              <span style="font-family:var(--mono);font-size:.8rem;color:var(--muted)">{{cnt}}</span>
+            </div>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 最近10条 -->
+  <div class="wad-card">
+    <div class="wad-card-hdr d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-clock me-2"></i>最近检测</span>
+      <a href="{{ url_for('pages.history') }}" class="btn btn-ghost btn-sm">查看全部 →</a>
+    </div>
+    <div class="table-responsive">
+      {% set cn={'norm':'正常流量','sqli':'SQL注入','xss':'XSS攻击','cmdi':'命令注入','path-traversal':'路径穿越'} %}
+      <table class="table wad-table mb-0">
+        <thead><tr><th>Payload</th><th>结果</th><th>置信度</th><th>模型</th><th>时间</th></tr></thead>
+        <tbody>
+          {% for r in recent %}
+          <tr class="{{ 'row-atk' if r.is_attack else '' }}">
+            <td style="font-family:var(--mono);font-size:.82rem;color:#fbbf24;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              {{ r.payload[:65] }}{% if r.payload|length>65 %}…{% endif %}</td>
+            <td><span class="badge {{r.label_cls}}">{{r.label_cn}}</span></td>
+            <!-- 核心修改：替换内联样式为 confidence-text 类，与history.html保持一致 -->
+            <td class="confidence-text">{{ "%.1f"|format(r.confidence*100) }}%</td>
+            <td><span class="badge bg-secondary">{{r.model_used}}</span></td>
+            <td style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">{{r.created_at.strftime('%m-%d %H:%M')}}</td>
+          </tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if total > 0 %}
+<script>
+const C   = {norm:'#22c55e',sqli:'#ef4444',xss:'#f97316',cmdi:'#eab308','path-traversal':'#a855f7'};
+const gc  = 'rgba(255,255,255,0.05)';
+const tc  = '#64748b';
+const pie = {{ by_label|tojson }};    // [[label, count], ...]  ← 已是普通列表
+const mod = {{ by_model|tojson }};
+const td  = {{ trend|tojson }};
+
+new Chart(document.getElementById('pieChart'),{
+  type:'doughnut',
+  data:{labels:pie.map(d=>d[0]),
+        datasets:[{data:pie.map(d=>d[1]),
+                   backgroundColor:pie.map(d=>C[d[0]]||'#64748b'),
+                   borderColor:'#0d1221',borderWidth:2}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:11}}}}}
+});
+
+new Chart(document.getElementById('trendChart'),{
+  type:'line',
+  data:{labels:td.map(d=>d.date),
+        datasets:[
+          {label:'总检测',data:td.map(d=>d.total),borderColor:'#38bdf8',
+           backgroundColor:'rgba(56,189,248,0.07)',fill:true,tension:.4,pointRadius:4},
+          {label:'攻击', data:td.map(d=>d.attack),borderColor:'#ef4444',
+           backgroundColor:'rgba(239,68,68,0.07)',fill:true,tension:.4,pointRadius:4},
+        ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    scales:{x:{ticks:{color:tc},grid:{color:gc}},
+            y:{ticks:{color:tc},grid:{color:gc},beginAtZero:true}},
+    plugins:{legend:{labels:{color:'#94a3b8'}}}}
+});
+
+new Chart(document.getElementById('modelChart'),{
+  type:'bar',
+  data:{labels:mod.map(d=>d[0]),
+        datasets:[{label:'调用次数',data:mod.map(d=>d[1]),
+                   backgroundColor:['#38bdf8','#a78bfa'],borderRadius:6}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:tc},grid:{color:gc}},
+            y:{ticks:{color:tc},grid:{color:gc},beginAtZero:true}}}
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,159 @@
+{% extends "base.html" %}{% block title %}批量检测{% endblock %}
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <div class="pg-hdr mb-4">
+    <h1><i class="bi bi-list-check"></i> 批量 Payload 检测</h1>
+    <p>手动输入或上传文件，最多 500 条，支持导出 CSV</p>
+  </div>
+  <div class="row g-4">
+
+    <!-- 左侧输入 -->
+    <div class="col-lg-4">
+
+      <!-- 模型选择（两种输入共用） -->
+      <div class="wad-card mb-3">
+        <div class="wad-card-hdr"><i class="bi bi-cpu me-2"></i>MODEL</div>
+        <div class="p-3">
+          <div class="d-flex gap-2">
+            {% for m in available %}
+            <label class="model-card flex-fill">
+              <input type="radio" name="model_sel" value="{{m}}" {% if loop.first %}checked{% endif %}>
+              <span class="mc-body">
+                <span class="mc-icon">{{ '🌳' if m=='lgbm' else '🧠' }}</span>
+                <span class="mc-name">{{ 'LightGBM' if m=='lgbm' else 'TextCNN' }}</span>
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- 手动输入 -->
+      <div class="wad-card mb-3">
+        <div class="wad-card-hdr"><i class="bi bi-keyboard me-2"></i>手动输入</div>
+        <div class="p-3">
+          <form method="POST" action="{{ url_for('pages.batch') }}" id="bForm">
+            <input type="hidden" name="model" id="hidModel1" value="lgbm">
+            <textarea name="payloads" class="form-control wad-ctrl" rows="8"
+              placeholder="每行一条 Payload"></textarea>
+            <div class="mt-1 mb-3" style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">
+              已输入 <span id="lc">0</span> 行
+            </div>
+            <button type="submit" class="btn wad-btn w-100">
+              <i class="bi bi-play-fill me-2"></i>开始检测</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- 文件上传 -->
+      <div class="wad-card">
+        <div class="wad-card-hdr"><i class="bi bi-cloud-upload me-2"></i>文件上传</div>
+        <div class="p-3">
+          <form method="POST" action="{{ url_for('pages.batch_upload') }}"
+                enctype="multipart/form-data">
+            <input type="hidden" name="model" id="hidModel2" value="lgbm">
+            <div class="mb-3">
+              <label class="wad-lbl">选择文件（.txt / .csv，每行一条）</label>
+              <input type="file" name="file" accept=".txt,.csv"
+                     class="form-control wad-ctrl" required>
+            </div>
+            <button type="submit" class="btn wad-btn w-100">
+              <i class="bi bi-upload me-2"></i>上传并检测</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧结果 -->
+    <div class="col-lg-8">
+      {% if stats %}
+      <!-- 统计卡片 -->
+      <div class="row g-3 mb-4">
+        {% for val,lbl,cls in [
+          (stats.total,  '总计',     ''),
+          (stats.normal, '正常',     'sc-green'),
+          (stats.attack, '攻击',     'sc-red'),
+          ("%.1f%%"|format(stats.attack/stats.total*100 if stats.total else 0),'攻击占比','sc-orange'),
+        ] %}
+        <div class="col-6 col-sm-3">
+          <div class="stat-card {{cls}}">
+            <div class="sc-val">{{val}}</div>
+            <div class="sc-lbl">{{lbl}}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- 标签汇总 + 导出按钮 -->
+      {% set cn={'norm':'正常流量','sqli':'SQL注入','xss':'XSS攻击','cmdi':'命令注入','path-traversal':'路径穿越'} %}
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        {% for lbl,cnt in stats.by_label.items() %}
+        <span class="badge bdg-{{lbl}} px-3 py-2">{{cn.get(lbl,lbl)}}: {{cnt}}</span>
+        {% endfor %}
+        {% if batch_id %}
+        <a href="{{ url_for('pages.export_batch', bid=batch_id) }}"
+           class="btn btn-sm ms-auto" style="background:#22c55e20;color:#86efac;border:1px solid #22c55e40;">
+          <i class="bi bi-download me-1"></i>导出 CSV
+        </a>
+        {% endif %}
+      </div>
+
+      <!-- 结果表 -->
+      <div class="wad-card">
+        <div class="wad-card-hdr d-flex justify-content-between">
+          <span><i class="bi bi-table me-2"></i>检测结果</span>
+          {% if batch_id %}
+          <span style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">
+            批次 {{ batch_id[:8] }}…
+          </span>
+          {% endif %}
+        </div>
+        <div class="table-responsive">
+          <table class="table wad-table mb-0">
+            <thead><tr><th>#</th><th>Payload</th><th>结果</th><th>置信度</th><th>模型</th></tr></thead>
+            <tbody>
+              {% for r in results %}
+              <tr class="{{ 'row-atk' if r.label!='norm' else '' }}">
+                <td style="font-family:var(--mono);color:var(--muted);font-size:.8rem">{{loop.index}}</td>
+                <td style="font-family:var(--mono);font-size:.82rem;color:#fbbf24;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                    title="{{r.payload}}">{{ r.payload[:70] }}{% if r.payload|length>70 %}…{% endif %}</td>
+                <td><span class="badge bdg-{{r.label}}">{{r.icon}} {{cn.get(r.label,r.label)}}</span></td>
+                <!-- 修改点：替换内联样式为 confidence-text 类 -->
+                <td class="confidence-text">{{ "%.1f"|format(r.confidence*100) }}%</td>
+                <td><span class="badge bg-secondary">{{r.model}}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% else %}
+      <div class="wad-card empty-card h-100">
+        <div class="p-5 d-flex flex-column align-items-center justify-content-center text-center h-100">
+          <div style="font-size:3rem">📋</div>
+          <div class="empty-title mt-3">等待批量检测</div>
+          <div class="empty-sub">在左侧输入多条 Payload 或上传文件</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// 同步模型选择到隐藏字段
+document.querySelectorAll('input[name="model_sel"]').forEach(r=>{
+  r.addEventListener('change',()=>{
+    document.getElementById('hidModel1').value = r.value;
+    document.getElementById('hidModel2').value = r.value;
+  });
+});
+// 行数计数
+const ta = document.querySelector('textarea[name="payloads"]');
+const lc = document.getElementById('lc');
+if(ta&&lc){ const upd=()=>{lc.textContent=ta.value.split('\n').filter(l=>l.trim()).length;};
+  ta.addEventListener('input',upd); upd(); }
+</script>
+{% endblock %}

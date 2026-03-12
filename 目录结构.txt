@@ -1,0 +1,25 @@
+wad_final/
+├── train.py                  ← 第一阶段训练脚本
+├── app.py                    ← Flask 入口
+├── config.py
+├── extensions.py
+├── requirements.txt
+├── inference/
+│   ├── __init__.py
+│   └── engine.py             ← 推理引擎
+├── models/
+│   ├── __init__.py
+│   └── record.py             ← 数据库表
+├── blueprints/
+│   ├── __init__.py
+│   ├── pages.py              ← 页面路由
+│   └── api.py                ← REST API
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── batch.html
+│   ├── history.html
+│   └── dashboard.html
+└── static/
+    ├── css/style.css
+    └── js/app.js

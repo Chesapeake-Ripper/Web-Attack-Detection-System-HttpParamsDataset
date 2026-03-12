@@ -1,0 +1,112 @@
+E:\ProgramData\Anaconda\envs\python3_9\python.exe E:\pythonProject\wad_final\train.py 
+[Info] 设备: cuda
+[Data] 训练 20712 条 | 测试 10355 条
+[Data] 训练集标签分布：
+attack_type
+norm              12870
+sqli               7235
+xss                 355
+path-traversal      193
+cmdi                 59
+Name: count, dtype: int64
+
+[Label] 类别: ['cmdi', 'norm', 'path-traversal', 'sqli', 'xss']
+[Feature] 构建 TF-IDF 特征...
+[Feature] 训练维度: (20712, 80019)
+
+========================================================
+  LightGBM 训练
+========================================================
+Training until validation scores don't improve for 30 rounds
+[50]	train's multi_logloss: 0.0257374	valid's multi_logloss: 0.0265518
+[100]	train's multi_logloss: 0.00106927	valid's multi_logloss: 0.00364612
+[150]	train's multi_logloss: 0.000211066	valid's multi_logloss: 0.00293526
+[200]	train's multi_logloss: 0.000137086	valid's multi_logloss: 0.00283517
+[250]	train's multi_logloss: 0.000122375	valid's multi_logloss: 0.00283506
+Early stopping, best iteration is:
+[220]	train's multi_logloss: 0.000129576	valid's multi_logloss: 0.00280818
+
+========================================================
+  LightGBM — 评估结果
+========================================================
+  Accuracy        : 0.9995
+  Precision(macro): 0.9818
+  Recall(macro)   : 0.9967
+  F1(macro)       : 0.9888
+  F1(weighted)    : 0.9995
+
+                precision    recall  f1-score   support
+
+          cmdi       0.91      1.00      0.95        30
+          norm       1.00      1.00      1.00      6434
+path-traversal       1.00      0.99      0.99        97
+          sqli       1.00      1.00      1.00      3617
+           xss       1.00      0.99      1.00       177
+
+      accuracy                           1.00     10355
+     macro avg       0.98      1.00      0.99     10355
+  weighted avg       1.00      1.00      1.00     10355
+
+[Eval] 混淆矩阵 → outputs\cm_lightgbm.png
+[Save] lgbm_model.txt
+[Info] 特征重要性图已保存
+
+========================================================
+  TextCNN 训练
+========================================================
+  Epoch   1/30 | Loss 0.5486 | Val F1 0.8076
+  Epoch   5/30 | Loss 0.0217 | Val F1 0.9663
+  Epoch  10/30 | Loss 0.0093 | Val F1 0.9849
+  Epoch  15/30 | Loss 0.0046 | Val F1 0.9855
+  Epoch  20/30 | Loss 0.0033 | Val F1 0.9855
+  Epoch  25/30 | Loss 0.0041 | Val F1 0.9855
+  Epoch  30/30 | Loss 0.0029 | Val F1 0.9855
+[TextCNN] 最佳 Val Macro-F1: 0.9861
+
+========================================================
+  TextCNN — 评估结果
+========================================================
+  Accuracy        : 0.9994
+  Precision(macro): 0.9927
+  Recall(macro)   : 0.9799
+  F1(macro)       : 0.9861
+  F1(weighted)    : 0.9994
+
+                precision    recall  f1-score   support
+
+          cmdi       0.96      0.90      0.93        30
+          norm       1.00      1.00      1.00      6434
+path-traversal       1.00      1.00      1.00        97
+          sqli       1.00      1.00      1.00      3617
+           xss       1.00      1.00      1.00       177
+
+      accuracy                           1.00     10355
+     macro avg       0.99      0.98      0.99     10355
+  weighted avg       1.00      1.00      1.00     10355
+
+[Eval] 混淆矩阵 → outputs\cm_textcnn.png
+[Save] label_encoder.pkl
+[Save] char_tfidf.pkl
+[Save] word_tfidf.pkl
+
+========================================================
+  模型性能汇总
+========================================================
+               acc      prec       rec    f1_mac     f1_wt
+LightGBM  0.999517  0.981756  0.996691  0.988784  0.999524
+TextCNN   0.999421  0.992678  0.979883  0.986058  0.999414
+
+─── outputs/ 文件清单 ───
+  char_tfidf.pkl                               3399.2 KB
+  cm_lightgbm.png                                64.8 KB
+  cm_textcnn.png                                 62.8 KB
+  label_encoder.pkl                               0.5 KB
+  lgbm_feature_importance.png                    41.4 KB
+  lgbm_model.txt                               4355.4 KB
+  model_comparison.csv                            0.2 KB
+  model_comparison.png                           21.5 KB
+  textcnn_best.pt                               488.4 KB
+  textcnn_training_curve.png                     47.9 KB
+  word_tfidf.pkl                               1755.6 KB
+
+✅  第一阶段全部完成！

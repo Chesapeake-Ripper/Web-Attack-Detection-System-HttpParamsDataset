@@ -1,0 +1,123 @@
+{% extends "base.html" %}{% block title %}单条检测{% endblock %}
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <div class="pg-hdr mb-4">
+    <h1><i class="bi bi-shield-check"></i> 单条 Payload 检测</h1>
+    <p>输入 HTTP 请求参数，实时识别攻击类型</p>
+  </div>
+  <div class="row g-4">
+
+    <!-- 输入 -->
+    <div class="col-lg-5">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-terminal me-2"></i>INPUT</div>
+        <div class="p-3">
+          <form method="POST" id="sForm">
+            <div class="mb-3">
+              <label class="wad-lbl">Payload 内容</label>
+              <textarea name="payload" class="form-control wad-ctrl" rows="5"
+                placeholder="示例：' OR 1=1 --" required>{{ request.form.get('payload','') }}</textarea>
+            </div>
+
+            <div class="mb-3">
+              <label class="wad-lbl">选择模型</label>
+              <div class="d-flex gap-2">
+                {% for m in available %}
+                <label class="model-card flex-fill">
+                  <input type="radio" name="model" value="{{m}}" {% if request.form.get("model", "") == m or (not request.form.get("model") and loop.first) %}checked{% endif %}>
+                  <span class="mc-body">
+                    <span class="mc-icon">{{ '🌳' if m=='lgbm' else '🧠' }}</span>
+                    <span class="mc-name">{{ 'LightGBM' if m=='lgbm' else 'TextCNN' }}</span>
+                    <span class="mc-sub">{{ '传统ML · 高精度' if m=='lgbm' else '深度学习 · 字符级' }}</span>
+                  </span>
+                </label>
+                {% endfor %}
+                {% if not available %}<p class="text-danger small">⚠ 无可用模型，检查 outputs/</p>{% endif %}
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="wad-lbl">快速示例</label>
+              <div class="d-flex flex-wrap gap-2">
+                {% for n,v in [('正常','campello, el'),('SQL注入',"' OR 1=1 --"),
+                  ('XSS','<script>alert(1)</script>'),('命令注入','; cat /etc/passwd'),
+                  ('路径穿越','../../../../etc/shadow')] %}
+                <button type="button" class="btn btn-eg" data-v="{{ v }}"
+                  onclick="document.querySelector('textarea[name=payload]').value=this.dataset.v">{{n}}</button>
+                {% endfor %}
+              </div>
+            </div>
+
+            <button type="submit" class="btn wad-btn w-100" {% if not available %}disabled{% endif %}>
+              <i class="bi bi-search me-2"></i>开始检测
+              <span class="spinner-border spinner-border-sm ms-2 d-none" id="spin"></span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 结果 -->
+    <div class="col-lg-7">
+      {% if result %}
+      <div class="wad-card result-card result-{{result.label}} anim-in">
+        <div class="wad-card-hdr d-flex justify-content-between">
+          <span><i class="bi bi-clipboard-data me-2"></i>RESULT</span>
+          <span style="font-family:var(--mono);font-size:.76rem;color:var(--muted)">#{{result.record_id}} · {{ 'LightGBM' if result.model=='lgbm' else 'TextCNN' }}</span>
+        </div>
+        <div class="p-3">
+          <div class="res-banner mb-4">
+            <div class="res-ico">{{result.icon}}</div>
+            <div class="flex-grow-1">
+              <div class="res-cn">{{result.label_cn}}</div>
+              <div class="res-en" style="font-family:var(--mono)">{{result.label}}</div>
+            </div>
+            <div class="text-end">
+              <div class="conf-num">{{ "%.1f"|format(result.confidence*100) }}%</div>
+              <div class="conf-sub">置信度</div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <div class="wad-lbl mb-1">检测 Payload</div>
+            <div class="payload-box">{{ result.payload }}</div>
+          </div>
+          <div class="mb-3">
+            <div class="wad-lbl mb-2">各类别概率分布</div>
+            {% set cn={'norm':'正常流量','sqli':'SQL注入','xss':'XSS攻击','cmdi':'命令注入','path-traversal':'路径穿越'} %}
+            {% for cls,prob in result.all_probs.items()|sort(attribute='1',reverse=True) %}
+            <div class="prob-row">
+              <span class="badge bdg-{{cls}}">{{cn.get(cls,cls)}}</span>
+              <div class="prob-track"><div class="prob-fill pf-{{cls}}" style="width:{{ (prob*100)|round(2) }}%"></div></div>
+              <span class="prob-pct">{{ "%.2f"|format(prob*100) }}%</span>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('pages.index') }}" class="btn btn-outline-secondary flex-fill btn-sm">
+              <i class="bi bi-arrow-repeat me-1"></i>继续检测</a>
+            <a href="{{ url_for('pages.history') }}" class="btn btn-ghost flex-fill btn-sm">
+              <i class="bi bi-clock-history me-1"></i>历史记录</a>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="wad-card empty-card h-100">
+        <div class="p-5 d-flex flex-column align-items-center justify-content-center text-center h-100">
+          <div style="font-size:3.5rem">🛡️</div>
+          <div class="empty-title mt-3">等待检测</div>
+          <div class="empty-sub">在左侧输入 Payload 并选择模型</div>
+          <div class="mt-2" style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">Ctrl+Enter 快速提交</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('sForm').addEventListener('submit',()=>{
+  document.getElementById('spin').classList.remove('d-none');
+});
+</script>
+{% endblock %}
