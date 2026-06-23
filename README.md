@@ -28,7 +28,7 @@ WAD（Web Attack Detection）是一个针对 HTTP 请求参数值的多分类攻
 
 ## 🖼️ 系统截图
 
-![系统截图](img/系统截图.jpeg)
+<img width="2372" height="2835" alt="系统截图" src="https://github.com/user-attachments/assets/89256d34-bd25-485d-b159-73a440302d91" />
 
 ---
 
