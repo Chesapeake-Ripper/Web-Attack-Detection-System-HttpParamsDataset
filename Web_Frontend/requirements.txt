@@ -1,0 +1,8 @@
+# WAD Flask 系统依赖（云端 API 版）
+# 不再需要 torch / lightgbm / scikit-learn / scipy / numpy
+# 只需 Web 框架 + 数据库 + HTTP 客户端
+
+Flask==3.1.0
+Flask-SQLAlchemy==3.1.1
+SQLAlchemy==2.0.31
+requests==2.32.3

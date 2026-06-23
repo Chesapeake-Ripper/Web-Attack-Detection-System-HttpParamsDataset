@@ -1,0 +1,352 @@
+{% extends "base.html" %}{% block title %}统计看板{% endblock %}
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <div class="pg-hdr mb-4">
+    <h1><i class="bi bi-bar-chart-line"></i> 统计看板</h1>
+    <p>全局检测数据统计与可视化</p>
+  </div>
+
+  <!-- KPI -->
+  <div class="row g-3 mb-4">
+    {% for val,lbl,icon,cls in [
+      (total,       '总检测次数', 'bi-activity',           ''),
+      (normal,      '正常流量',   'bi-shield-check',       'kpi-green'),
+      (attack,      '攻击流量',   'bi-shield-exclamation', 'kpi-red'),
+      (attack_rate|string+'%','攻击检出率','bi-percent',   'kpi-orange'),
+    ] %}
+    <div class="col-6 col-lg-3">
+      <div class="kpi-card {{cls}}">
+        <i class="bi {{icon}} kpi-ico"></i>
+        <div class="kpi-val">{{val}}</div>
+        <div class="kpi-lbl">{{lbl}}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if total == 0 %}
+  <div class="wad-card">
+    <div class="p-5 text-center">
+      <div style="font-size:3rem">📊</div>
+      <div class="empty-title mt-3">暂无数据</div>
+      <div class="empty-sub">先进行一些检测</div>
+      <a href="{{ url_for('pages.index') }}" class="btn wad-btn mt-3">开始检测</a>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="row g-4 mb-4">
+    <!-- 饼图 -->
+    <div class="col-lg-4">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-pie-chart me-2"></i>攻击类型分布</div>
+        <div class="p-3">
+          <div style="height:210px"><canvas id="pieChart"></canvas></div>
+          {% set cn={'norm':'正常流量','sqli':'SQL注入','xss':'XSS攻击','cmdi':'命令注入','path-traversal':'路径穿越'} %}
+          <div class="mt-3">
+            {% for lbl,cnt in by_label %}
+            <div class="d-flex justify-content-between mb-1">
+              <span class="badge bdg-{{lbl}}">{{cn.get(lbl,lbl)}}</span>
+              <span style="font-family:var(--mono);font-size:.8rem;color:var(--muted)">{{cnt}}</span>
+            </div>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 趋势折线图 -->
+    <div class="col-lg-5">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-graph-up me-2"></i>近 7 天趋势</div>
+        <div class="p-3"><div style="height:270px"><canvas id="trendChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- 模型柱图 -->
+    <div class="col-lg-3">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-cpu me-2"></i>模型使用分布</div>
+        <div class="p-3">
+          <div style="height:210px"><canvas id="modelChart"></canvas></div>
+          <div class="mt-3">
+            {% for m,cnt in by_model %}
+            <div class="d-flex justify-content-between mb-1">
+              <span class="badge bg-secondary">{{m}}</span>
+              <span style="font-family:var(--mono);font-size:.8rem;color:var(--muted)">{{cnt}}</span>
+            </div>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% endif %}
+
+<!-- ══ 模型性能评估区块（始终显示，数据来自 HttpParamsDataset 测试集）══ -->
+<div class="row g-3 mt-2 mb-2">
+  <div class="col-12">
+    <div class="eval-section-hdr">
+      <i class="bi bi-clipboard2-data me-2"></i>模型性能评估
+      <!-- 👇 美化后的数据集标签 -->
+      <span class="eval-dataset-tag">
+        <i class="bi bi-database me-1"></i> <!-- 数据库图标 -->
+        HttpParamsDataset
+        <span class="eval-dataset-divider">·</span>
+        ⚡测试集 10,355 条
+      </span>
+    </div>
+  </div>
+</div>
+  <!-- 数据集概览卡 -->
+  <div class="row g-3 mb-3">
+    {% for label,cn_name,cnt,cls in [
+      ('norm',           '正常流量', 6434, 'bdg-norm'),
+      ('sqli',           'SQL注入',  3617, 'bdg-sqli'),
+      ('xss',            'XSS攻击',  177,  'bdg-xss'),
+      ('path-traversal', '路径穿越', 97,   'bdg-path-traversal'),
+      ('cmdi',           '命令注入', 30,   'bdg-cmdi'),
+    ] %}
+    <div class="col-6 col-md-4 col-lg">
+      <div class="eval-dist-card">
+        <span class="badge {{ cls }} mb-1">{{ cn_name }}</span>
+        <div class="eval-dist-cnt">{{ cnt }}</div>
+        <div class="eval-dist-pct">{{ "%.1f"|format(cnt/10355*100) }}%</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- 指标对比：柱图 + 数值卡 -->
+  <div class="row g-4 mb-4">
+    <!-- 柱状对比图 -->
+    <div class="col-lg-7">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr">
+          <i class="bi bi-bar-chart me-2"></i>综合指标对比
+        </div>
+        <div class="p-3">
+          <div style="height:230px"><canvas id="evalChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 两个模型指标数值卡 -->
+    <div class="col-lg-5">
+      <div class="row g-3 h-100">
+        <!-- LightGBM -->
+        <div class="col-12">
+          <div class="eval-model-card eval-lgbm">
+            <div class="eval-model-hdr">🌳 LightGBM <span class="eval-model-sub">传统ML · 梯度提升树</span></div>
+            <div class="row g-2 mt-1">
+              {% for name, val in [('Accuracy','99.95%'),('Precision','98.18%'),('Recall','99.67%'),('Macro F1','98.88%'),('Weighted F1','99.95%')] %}
+              <div class="col text-center">
+                <div class="eval-metric-val">{{ val }}</div>
+                <div class="eval-metric-lbl">{{ name }}</div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <!-- TextCNN -->
+        <div class="col-12">
+          <div class="eval-model-card eval-textcnn">
+            <div class="eval-model-hdr">🧠 TextCNN <span class="eval-model-sub">深度学习 · 字符级CNN</span></div>
+            <div class="row g-2 mt-1">
+              {% for name, val in [('Accuracy','99.94%'),('Precision','99.27%'),('Recall','97.99%'),('Macro F1','98.61%'),('Weighted F1','99.94%')] %}
+              <div class="col text-center">
+                <div class="eval-metric-val">{{ val }}</div>
+                <div class="eval-metric-lbl">{{ name }}</div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 各类别 F1 对比 -->
+  <div class="row g-4 mb-2">
+    <div class="col-lg-8">
+      <div class="wad-card">
+        <div class="wad-card-hdr">
+          <i class="bi bi-grid-3x3 me-2"></i>各攻击类别 F1-Score 对比
+        </div>
+        <div class="p-3">
+          <div style="height:220px"><canvas id="classF1Chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <!-- 测试结论说明 -->
+    <div class="col-lg-4">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-journal-text me-2"></i>评估说明</div>
+        <div class="p-3 eval-note-body">
+          <div class="eval-note-item">
+            <span class="eval-note-dot dot-cyan"></span>
+            <span>测试集共 <strong>10,355</strong> 条样本，覆盖 5 种流量类别</span>
+          </div>
+          <div class="eval-note-item">
+            <span class="eval-note-dot dot-green"></span>
+            <span>两模型 Accuracy 均超 <strong>99.9%</strong>，满足实时检测需求</span>
+          </div>
+          <div class="eval-note-item">
+            <span class="eval-note-dot dot-orange"></span>
+            <span>cmdi / path-traversal 样本较少，F1 略低于其余类别</span>
+          </div>
+          <div class="eval-note-item">
+            <span class="eval-note-dot dot-purple"></span>
+            <span>LightGBM Macro F1 <strong>98.88%</strong> 略优于 TextCNN <strong>98.61%</strong>；TextCNN Precision <strong>99.27%</strong> 更高，LightGBM Recall <strong>99.67%</strong> 更高</span>
+          </div>
+          <div class="eval-note-item">
+            <span class="eval-note-dot dot-red"></span>
+            <span>cmdi 仅 30 条测试样本，是 F1 最低的类别（LightGBM 95%，TextCNN 93%）；其余四类 F1 均达 99% 以上</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if total > 0 %}
+<script>
+const C   = {norm:'#22c55e',sqli:'#ef4444',xss:'#f97316',cmdi:'#eab308','path-traversal':'#a855f7'};
+const gc  = 'rgba(255,255,255,0.05)';
+const tc  = '#64748b';
+const pie = {{ by_label|tojson }};    // [[label, count], ...]  ← 已是普通列表
+const mod = {{ by_model|tojson }};
+const td  = {{ trend|tojson }};
+
+new Chart(document.getElementById('pieChart'),{
+  type:'doughnut',
+  data:{labels:pie.map(d=>d[0]),
+        datasets:[{data:pie.map(d=>d[1]),
+                   backgroundColor:pie.map(d=>C[d[0]]||'#64748b'),
+                   borderColor:'#0d1221',borderWidth:2}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:11}}}}}
+});
+
+new Chart(document.getElementById('trendChart'),{
+  type:'line',
+  data:{labels:td.map(d=>d.date),
+        datasets:[
+          {label:'总检测',data:td.map(d=>d.total),borderColor:'#38bdf8',
+           backgroundColor:'rgba(56,189,248,0.07)',fill:true,tension:.4,pointRadius:4},
+          {label:'攻击', data:td.map(d=>d.attack),borderColor:'#ef4444',
+           backgroundColor:'rgba(239,68,68,0.07)',fill:true,tension:.4,pointRadius:4},
+        ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    scales:{x:{ticks:{color:tc},grid:{color:gc}},
+            y:{ticks:{color:tc},grid:{color:gc},beginAtZero:true}},
+    plugins:{legend:{labels:{color:'#94a3b8'}}}}
+});
+
+new Chart(document.getElementById('modelChart'),{
+  type:'bar',
+  data:{labels:mod.map(d=>d[0]),
+        datasets:[{label:'调用次数',data:mod.map(d=>d[1]),
+                   backgroundColor:['#38bdf8','#a78bfa'],borderRadius:6}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:tc},grid:{color:gc}},
+            y:{ticks:{color:tc},grid:{color:gc},beginAtZero:true}}}
+});
+</script>
+{% endif %}
+
+{# ── 模型评估图表（始终渲染，与检测数据无关）── #}
+<script>
+(function() {
+  const gc = 'rgba(255,255,255,0.05)';
+  const tc = '#64748b';
+
+  // ── 综合指标对比柱图（数据来源：HttpParamsDataset 测试集 10355 条）──
+  // LightGBM: Acc=99.95  Prec=98.18  Rec=99.67  F1mac=98.88  F1wt=99.95
+  // TextCNN:  Acc=99.94  Prec=99.27  Rec=97.99  F1mac=98.61  F1wt=99.94
+  new Chart(document.getElementById('evalChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Accuracy', 'Precision', 'Recall', 'Macro F1', 'Weighted F1'],
+      datasets: [
+        {
+          label: 'LightGBM',
+          data: [99.95, 98.18, 99.67, 98.88, 99.95],
+          backgroundColor: 'rgba(56,189,248,0.75)',
+          borderColor: '#38bdf8',
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+        {
+          label: 'TextCNN',
+          data: [99.94, 99.27, 97.99, 98.61, 99.94],
+          backgroundColor: 'rgba(167,139,250,0.75)',
+          borderColor: '#a78bfa',
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 12 } } } },
+      scales: {
+        x: { ticks: { color: tc }, grid: { color: gc } },
+        y: {
+          ticks: { color: tc, callback: v => v + '%' },
+          grid: { color: gc },
+          min: 96.5, max: 100.3,
+        },
+      },
+    },
+  });
+
+  // ── 各类别 F1-Score 对比柱图（真实 classification_report 数据）──
+  // LightGBM: cmdi=0.95  norm=1.00  path-traversal=0.99  sqli=1.00  xss=1.00
+  // TextCNN:  cmdi=0.93  norm=1.00  path-traversal=1.00  sqli=1.00  xss=1.00
+  const classLabels = ['正常流量\n(n=6434)', 'SQL注入\n(n=3617)', 'XSS攻击\n(n=177)', '路径穿越\n(n=97)', '命令注入\n(n=30)'];
+  const lgbmF1  = [100.00, 100.00, 99.50, 99.00, 95.00];  // 单位：%
+  const tcnnF1  = [100.00, 100.00, 99.50, 100.00, 93.00];
+
+  new Chart(document.getElementById('classF1Chart'), {
+    type: 'bar',
+    data: {
+      labels: classLabels,
+      datasets: [
+        {
+          label: 'LightGBM',
+          data: lgbmF1,
+          backgroundColor: 'rgba(56,189,248,0.72)',
+          borderColor: '#38bdf8',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+        {
+          label: 'TextCNN',
+          data: tcnnF1,
+          backgroundColor: 'rgba(167,139,250,0.72)',
+          borderColor: '#a78bfa',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 12 } } } },
+      scales: {
+        x: { ticks: { color: tc }, grid: { color: gc } },
+        y: {
+          ticks: { color: tc, callback: v => v + '%' },
+          grid: { color: gc },
+          min: 91, max: 100.8,
+        },
+      },
+    },
+  });
+})();
+</script>
+{% endblock %}

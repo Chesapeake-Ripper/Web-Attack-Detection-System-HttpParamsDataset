@@ -1,0 +1,108 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Model files
+*.pkl binary
+*.pt binary
+*.pth binary
+*.onnx binary
+*.h5 binary
+*.hdf5 binary
+*.pb binary
+*.tflite binary
+
+# Image files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# Archive files
+*.zip binary
+*.tar.gz binary
+*.tgz binary
+*.gz binary
+*.7z binary
+*.rar binary
+
+# Documents
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+
+# Source code
+*.py text diff=python
+*.js text
+*.ts text
+*.html text
+*.css text
+*.json text
+*.xml text
+*.yaml text
+*.yml text
+*.md text
+*.txt text
+*.csv text
+
+# Configuration files
+*.ini text
+*.cfg text
+*.conf text
+*.toml text
+
+# Shell scripts
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Windows specific
+*.dll binary
+*.exe binary
+*.msi binary
+
+# macOS specific
+*.dmg binary
+*.app binary
+
+# Linux specific
+*.so binary
+*.deb binary
+*.rpm binary
+
+# Jupyter Notebooks
+*.ipynb text
+
+# Database files
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Log files
+*.log text
+
+# Training outputs
+outputs/*.png binary
+outputs/*.pkl binary
+outputs/*.pt binary
+outputs/*.txt text
+outputs/*.csv text
+outputs/*.json text
+
+# IDE specific
+.idea/ text
+.vscode/ text
+*.iml text
+
+# OS specific
+.DS_Store binary
+Thumbs.db binary
+
+# Large files (Git LFS)
+# *.bin filter=lfs diff=lfs merge=lfs -text
+# *.dat filter=lfs diff=lfs merge=lfs -text

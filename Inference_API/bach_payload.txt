@@ -1,0 +1,5 @@
+<script>alert(1)<\/script>
+' OR 1=1 --
+campello, el
+; cat /etc/passwd
+../../../../etc/shadow

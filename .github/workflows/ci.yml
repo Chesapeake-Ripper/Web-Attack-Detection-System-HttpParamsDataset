@@ -1,0 +1,150 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.9, '3.10', '3.11']
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        if [ -f A_Train_Model-6-12/requirements.txt ]; then pip install -r A_Train_Model-6-12/requirements.txt; fi
+        if [ -f API_Web_6-12/requirements.txt ]; then pip install -r API_Web_6-12/requirements.txt; fi
+        if [ -f API_Model_6-12/requirements.txt ]; then pip install -r API_Model_6-12/requirements.txt; fi
+
+    - name: Lint with flake8
+      run: |
+        # 停止构建如果发现语法错误或未定义的名称
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # 退出代码将被接受，即使有警告
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Test training module
+      run: |
+        cd A_Train_Model-6-12
+        python -c "import train; print('Training module imported successfully')"
+
+    - name: Test web frontend
+      run: |
+        cd API_Web_6-12
+        python -c "import app; print('Web frontend imported successfully')"
+
+    - name: Test inference service
+      run: |
+        cd API_Model_6-12
+        python -c "import api_server; print('Inference service imported successfully')"
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build wheel
+
+    - name: Build package
+      run: |
+        # 这里可以添加打包逻辑
+        echo "Build completed successfully"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Deploy documentation
+      run: |
+        # 这里可以添加文档部署逻辑
+        echo "Documentation deployment completed"
+
+  security:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+
+    - name: Run security checks
+      run: |
+        # 使用 bandit 进行代码安全检查
+        bandit -r A_Train_Model-6-12/ -f json -o bandit-report.json || true
+        bandit -r API_Web_6-12/ -f json -o bandit-web-report.json || true
+        bandit -r API_Model_6-12/ -f json -o bandit-api-report.json || true
+
+        # 使用 safety 检查依赖漏洞
+        if [ -f A_Train_Model-6-12/requirements.txt ]; then safety check -r A_Train_Model-6-12/requirements.txt; fi
+        if [ -f API_Web_6-12/requirements.txt ]; then safety check -r API_Web_6-12/requirements.txt; fi
+        if [ -f API_Model_6-12/requirements.txt ]; then safety check -r API_Model_6-12/requirements.txt; fi
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          bandit-web-report.json
+          bandit-api-report.json
+
+  performance:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest-benchmark memory-profiler
+
+    - name: Run performance tests
+      run: |
+        # 这里可以添加性能测试
+        echo "Performance tests completed"

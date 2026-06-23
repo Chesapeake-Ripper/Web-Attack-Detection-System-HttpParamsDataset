@@ -1,0 +1,345 @@
+{% extends "base.html" %}{% block title %}单条检测{% endblock %}
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <div class="pg-hdr mb-4">
+    <h1><i class="bi bi-shield-check"></i> 单条 Payload 检测</h1>
+    <p>输入 HTTP 请求参数，实时识别攻击类型</p>
+  </div>
+  <div class="row g-4">
+
+    <!-- ── 左列：输入 ── -->
+    <div class="col-lg-5">
+      <div class="wad-card h-100">
+        <div class="wad-card-hdr"><i class="bi bi-terminal me-2"></i>INPUT</div>
+        <div class="p-3">
+          <form method="POST" id="sForm">
+            <div class="mb-3">
+              <label class="wad-lbl">Payload 内容</label>
+              <textarea name="payload" id="payloadInput" class="form-control wad-ctrl" rows="5"
+                placeholder="示例：' OR 1=1 --" required>{{ request.form.get('payload','') }}</textarea>
+            </div>
+
+            <div class="mb-3">
+              <label class="wad-lbl">选择模型（单模型检测时生效）</label>
+              <div class="d-flex gap-2 flex-nowrap align-items-stretch">
+                {% for m in available %}
+                <label class="model-card flex-fill">
+                  <input type="radio" name="model" value="{{m}}"
+                    {% if request.form.get("model","") == m or (not request.form.get("model") and loop.first) %}checked{% endif %}>
+                  <span class="mc-body">
+                    <span class="mc-icon">{{ '🌳' if m=='lgbm' else '🧠' }}</span>
+                    <span class="mc-name">{{ 'LightGBM' if m=='lgbm' else 'TextCNN' }}</span>
+                    <span class="mc-sub">{{ '传统ML · 高精度' if m=='lgbm' else '深度学习 · 字符级' }}</span>
+                  </span>
+                </label>
+                {% endfor %}
+                {% if not available %}<p class="text-danger small">⚠ 无可用模型，检查云端 API</p>{% endif %}
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="wad-lbl">快速示例</label>
+              <div class="d-flex flex-wrap gap-2">
+                {% for n,v in [('正常','campello, el'),('SQL注入',"' OR 1=1 --"),
+                  ('XSS',"<script>alert(1)<\/script>"),('命令注入','; cat /etc/passwd'),
+                  ('路径穿越','../../../../etc/shadow')] %}
+                <button type="button" class="btn btn-eg" data-v="{{ v }}"
+                  onclick="document.getElementById('payloadInput').value=this.dataset.v">{{n}}</button>
+                {% endfor %}
+              </div>
+            </div>
+
+            <!-- 操作按钮组 -->
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn wad-btn flex-fill" {% if not available %}disabled{% endif %}>
+                <i class="bi bi-search me-1"></i>单模型检测
+                <span class="spinner-border spinner-border-sm ms-1 d-none" id="singleSpin"></span>
+              </button>
+              <button type="button" class="btn btn-compare flex-fill"
+                id="compareBtn" onclick="doCompare()" {% if not available %}disabled{% endif %}>
+                <i class="bi bi-layout-split me-1"></i>双模型对比
+                <span class="spinner-border spinner-border-sm ms-1 d-none" id="compareSpin"></span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 右列：结果 ── -->
+    <div class="col-lg-7">
+
+      <!-- 单模型结果（服务端渲染） -->
+      <div id="singleResult" {% if not result %}class="d-none"{% endif %}>
+        {% if result %}
+        <div class="wad-card result-card result-{{result.label}} anim-in">
+          <div class="wad-card-hdr d-flex justify-content-between">
+            <span><i class="bi bi-clipboard-data me-2"></i>RESULT · 单模型</span>
+            <span style="font-family:var(--mono);font-size:.76rem;color:var(--muted)">
+              #{{result.record_id}} · {{ 'LightGBM' if result.model=='lgbm' else 'TextCNN' }}
+            </span>
+          </div>
+          <div class="p-3">
+            <div class="res-banner mb-4">
+              {% set _icons={'norm':'✅','sqli':'🔴','xss':'🟠','cmdi':'🟡','path-traversal':'🟣'} %}
+              <div class="res-ico">{{ _icons.get(result.label, result.icon or '❓') }}</div>
+              <div class="flex-grow-1">
+                <div class="res-cn">{{result.label_cn}}</div>
+                <div class="res-en" style="font-family:var(--mono)">{{result.label}}</div>
+              </div>
+              <div class="text-end">
+                <div class="conf-num">{{ "%.1f"|format(result.confidence*100) }}%</div>
+                <div class="conf-sub">置信度</div>
+              </div>
+            </div>
+            <div class="mb-3">
+              <div class="wad-lbl mb-1">检测 Payload</div>
+              <div class="payload-box">{{ result.payload }}</div>
+            </div>
+            <div class="mb-3">
+              <div class="wad-lbl mb-2">各类别概率分布</div>
+              {% set cn={'norm':'正常流量','sqli':'SQL注入','xss':'XSS攻击','cmdi':'命令注入','path-traversal':'路径穿越'} %}
+              {% for cls,prob in result.all_probs.items()|sort(attribute='1',reverse=True) %}
+              <div class="prob-row">
+                <span class="badge bdg-{{cls}}">{{cn.get(cls,cls)}}</span>
+                <div class="prob-track"><div class="prob-fill pf-{{cls}}" style="width:{{ (prob*100)|round(2) }}%"></div></div>
+                <span class="prob-pct">{{ "%.2f"|format(prob*100) }}%</span>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="d-flex gap-2">
+              <a href="{{ url_for('pages.index') }}" class="btn btn-outline-secondary flex-fill btn-sm">
+                <i class="bi bi-arrow-repeat me-1"></i>继续检测</a>
+              <a href="{{ url_for('pages.history') }}" class="btn btn-ghost flex-fill btn-sm">
+                <i class="bi bi-clock-history me-1"></i>历史记录</a>
+            </div>
+
+            {# ── 静态攻击说明 ── #}
+            {% set attack_info = {
+              'sqli': {
+                'title': 'SQL 注入（SQL Injection）',
+                'principle': '攻击者在用户输入中拼接恶意 SQL 片段，欺骗后端数据库执行非预期查询，可导致数据泄露、身份绕过，甚至整个数据库被清空或删除。',
+                'defense': ['使用参数化查询（Prepared Statement）或 ORM，彻底隔离数据与 SQL 指令', '对所有用户输入进行严格的类型校验与白名单过滤', '最小化数据库账户权限，禁用 xp_cmdshell 等高危函数'],
+                'level': '严重', 'level_cls': 'lvl-critical'
+              },
+              'xss': {
+                'title': 'XSS 跨站脚本攻击（Cross-Site Scripting）',
+                'principle': '攻击者将恶意 JavaScript 注入页面，当其他用户浏览时脚本在其浏览器内自动执行，可窃取 Cookie/会话令牌、伪造操作或重定向至钓鱼页面。',
+                'defense': ['对所有输出内容进行 HTML 实体编码（如 htmlspecialchars）', '设置 Content-Security-Policy（CSP）响应头，限制脚本资源来源', '对 Cookie 设置 HttpOnly 和 SameSite 属性，防止被脚本读取'],
+                'level': '高', 'level_cls': 'lvl-high'
+              },
+              'cmdi': {
+                'title': '命令注入（Command Injection）',
+                'principle': '攻击者在参数中插入 Shell 命令分隔符（如 ;、&&、|），使服务器将用户输入作为系统命令执行，攻击者可借此完全控制服务器。',
+                'defense': ['避免将用户输入直接传递给 Shell，优先使用语言内置函数替代 system() 调用', '使用白名单严格限制允许的输入字符集（如只允许字母数字）', '以最低权限运行 Web 服务进程，并在沙箱环境中执行'],
+                'level': '严重', 'level_cls': 'lvl-critical'
+              },
+              'path-traversal': {
+                'title': '路径穿越（Path Traversal）',
+                'principle': '攻击者通过构造包含 ../ 的路径跨越限定目录，任意访问服务器文件（如 /etc/passwd），可导致配置文件、私钥等敏感数据泄露。',
+                'defense': ['对文件路径进行 realpath 规范化后，验证是否仍在允许目录内', '使用白名单限定可访问的文件名和扩展名', '避免将用户输入直接拼接到文件系统路径，使用安全 API 代替'],
+                'level': '高', 'level_cls': 'lvl-high'
+              }
+            } %}
+            {% if result.label != 'norm' and result.label in attack_info %}
+            {% set info = attack_info[result.label] %}
+            <div class="atk-info-card mt-3">
+              <div class="atk-info-hdr">
+                <span><i class="bi bi-book me-2"></i>攻击原理说明</span>
+                <span class="atk-level {{ info.level_cls }}">危害：{{ info.level }}</span>
+              </div>
+              <div class="atk-info-body">
+                <div class="atk-info-title">{{ info.title }}</div>
+                <div class="atk-principle">
+                  <span class="atk-tag">原理</span>{{ info.principle }}
+                </div>
+                <div class="atk-defense-title">
+                  <i class="bi bi-shield-check me-1"></i>防御建议
+                </div>
+                <ul class="atk-defense-list">
+                  {% for d in info.defense %}<li>{{ d }}</li>{% endfor %}
+                </ul>
+              </div>
+            </div>
+            {% endif %}
+
+            {# ── AI 深度分析面板 ── #}
+            <div class="ai-panel mt-3">
+              <div class="ai-panel-hdr">
+                <span><i class="bi bi-stars me-2"></i>AI 深度分析</span>
+                <button class="btn btn-ai-analyze" id="btnAnalyze"
+                  data-payload="{{ result.payload | e }}"
+                  data-label="{{ result.label }}"
+                  data-label-cn="{{ result.label_cn }}"
+                  data-confidence="{{ result.confidence }}"
+                  data-model="{{ result.model }}">
+                  <i class="bi bi-cpu me-1"></i>开始分析
+                </button>
+              </div>
+              <div class="ai-panel-body" id="aiBody">
+                <div class="ai-idle" id="aiIdle">
+                  <i class="bi bi-robot" style="font-size:1.6rem;color:var(--cyan);opacity:.45"></i>
+                  <div class="mt-2">点击「开始分析」，由 AI 对此 Payload 进行深度安全解析</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- 双模型对比结果（JS 渲染） -->
+      <div id="compareResult" class="d-none">
+        <div class="wad-card anim-in">
+          <div class="wad-card-hdr d-flex justify-content-between">
+            <span><i class="bi bi-layout-split me-2"></i>RESULT · 双模型对比</span>
+            <span style="font-family:var(--mono);font-size:.76rem;color:var(--muted)">LightGBM vs TextCNN</span>
+          </div>
+          <div class="p-3">
+            <div id="comparePayload" class="mb-3"></div>
+            <div id="compareAgree" class="mb-3"></div>
+            <div id="compareCards" class="compare-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div id="emptyState" {% if result %}class="d-none"{% endif %}>
+        <div class="wad-card empty-card">
+          <div class="p-5 d-flex flex-column align-items-center justify-content-center text-center">
+            <div style="font-size:3.5rem">🛡️</div>
+            <div class="empty-title mt-3">等待检测</div>
+            <div class="empty-sub">在左侧输入 Payload 并选择检测模式</div>
+            <div class="mt-2" style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">
+              Ctrl+Enter 快速提交 · 支持单模型检测 / 双模型对比
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+
+    </div>
+  </div>
+</div>
+
+<script id="resultData" type="application/json">
+  {{ result | tojson if result else 'null' }}
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── 辅助 ────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+const LABEL_CN    = {norm:'正常流量',sqli:'SQL注入',xss:'XSS攻击',cmdi:'命令注入','path-traversal':'路径穿越'};
+const LABEL_ICONS = {norm:'✅',sqli:'🔴',xss:'🟠',cmdi:'🟡','path-traversal':'🟣'};
+const PROB_CLS    = {norm:'pf-norm',sqli:'pf-sqli',xss:'pf-xss',cmdi:'pf-cmdi','path-traversal':'pf-path-traversal'};
+
+// ── 单模型检测 loading ───────────────────────────────────
+document.getElementById('sForm').addEventListener('submit', () => {
+  document.getElementById('singleSpin').classList.remove('d-none');
+});
+
+// ── 双模型对比 ───────────────────────────────────────────
+async function doCompare() {
+  const payload = document.getElementById('payloadInput').value.trim();
+  if (!payload) { alert('请先输入 Payload 内容'); return; }
+
+  const btn  = document.getElementById('compareBtn');
+  const spin = document.getElementById('compareSpin');
+  btn.disabled = true;
+  spin.classList.remove('d-none');
+
+  ['singleResult','compareResult'].forEach(id =>
+    document.getElementById(id).classList.add('d-none'));
+  document.getElementById('emptyState').classList.add('d-none');
+
+  try {
+    const resp = await fetch('/api/compare', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({payload}),
+    });
+    const json = await resp.json();
+    if (!json.success) throw new Error(json.error || '未知错误');
+    renderCompare(json.data, payload);
+  } catch(e) {
+    alert('双模型对比失败：' + e.message);
+    document.getElementById('emptyState').classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    spin.classList.add('d-none');
+  }
+}
+
+// ── 渲染对比卡片 ─────────────────────────────────────────
+function renderProbBars(probs) {
+  return Object.entries(probs || {}).sort((a,b)=>b[1]-a[1]).slice(0,3)
+    .map(([cls,p]) => `
+      <div class="prob-row" style="margin-bottom:.28rem">
+        <span class="badge bdg-${cls}" style="font-size:.64rem;min-width:58px;text-align:center">
+          ${escHtml(LABEL_CN[cls]||cls)}</span>
+        <div class="prob-track">
+          <div class="prob-fill ${PROB_CLS[cls]||''}" style="width:${(p*100).toFixed(1)}%"></div>
+        </div>
+        <span class="prob-pct" style="font-size:.7rem">${(p*100).toFixed(1)}%</span>
+      </div>`).join('');
+}
+
+function renderModelCard(mod, r) {
+  const icon = LABEL_ICONS[r.label] || '❓';
+  const cn   = r.label_cn || LABEL_CN[r.label] || r.label;
+  const conf = (r.confidence * 100).toFixed(1);
+  const name = mod === 'lgbm' ? '🌳 LightGBM' : '🧠 TextCNN';
+  const sub  = mod === 'lgbm' ? '传统ML · 高精度' : '深度学习 · 字符级';
+  return `
+    <div class="cmp-card result-${escHtml(r.label)} anim-in">
+      <div class="cmp-card-hdr">
+        <span>${name}</span>
+        <span style="color:var(--muted);font-size:.67rem;font-family:var(--mono)">${sub}</span>
+      </div>
+      <div class="cmp-banner">
+        <span class="cmp-icon">${icon}</span>
+        <div class="flex-grow-1">
+          <div class="cmp-label">${escHtml(cn)}</div>
+          <div style="font-family:var(--mono);font-size:.7rem;color:var(--muted)">${escHtml(r.label)}</div>
+        </div>
+        <div class="text-end">
+          <div class="cmp-conf">${conf}%</div>
+          <div style="font-size:.67rem;color:var(--muted)">置信度</div>
+        </div>
+      </div>
+      <div class="mt-2">${renderProbBars(r.all_probs)}</div>
+    </div>`;
+}
+
+function renderCompare(data, payload) {
+  document.getElementById('comparePayload').innerHTML =
+    `<div class="wad-lbl mb-1">检测 Payload</div>
+     <div class="payload-box">${escHtml(payload)}</div>`;
+
+  const agree = data.lgbm.label === data.textcnn.label;
+  document.getElementById('compareAgree').innerHTML = agree
+    ? `<div class="agree-badge agree-yes"><i class="bi bi-check-circle me-1"></i>两模型结论一致</div>`
+    : `<div class="agree-badge agree-no"><i class="bi bi-exclamation-triangle me-1"></i>两模型结论存在分歧，建议人工核查</div>`;
+
+  document.getElementById('compareCards').innerHTML =
+    renderModelCard('lgbm', data.lgbm) + renderModelCard('textcnn', data.textcnn);
+
+  document.getElementById('compareResult').classList.remove('d-none');
+}
+
+// ── Ctrl+Enter 快速提交 ──────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='Enter') {
+    const f = document.getElementById('sForm');
+    if (f) f.requestSubmit();
+  }
+});
+</script>
+{% endblock %}

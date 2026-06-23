@@ -1,0 +1,109 @@
+{% extends "base.html" %}{% block title %}历史记录{% endblock %}
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <div class="pg-hdr mb-4">
+    <h1><i class="bi bi-clock-history"></i> 历史检测记录</h1>
+    <p>查询所有检测记录，支持多维筛选</p>
+  </div>
+
+  <!-- 筛选 -->
+  <div class="wad-card mb-4">
+    <div class="p-3">
+      <form method="GET" class="row g-2 align-items-end">
+        <div class="col-sm-4">
+          <label class="wad-lbl">关键词</label>
+          <input type="text" name="keyword" value="{{f_kw}}"
+                 class="form-control wad-ctrl" placeholder="搜索 Payload">
+        </div>
+        <div class="col-sm-2">
+          <label class="wad-lbl">攻击类型</label>
+          <select name="label" class="form-select wad-ctrl">
+            <option value="">全部</option>
+            {% for v,n in [('norm','正常'),('sqli','SQL注入'),('xss','XSS'),
+                           ('cmdi','命令注入'),('path-traversal','路径穿越')] %}
+            <option value="{{v}}" {{'selected' if f_label==v}}>{{n}}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="wad-lbl">模型</label>
+          <select name="model" class="form-select wad-ctrl">
+            <option value="">全部</option>
+            {% for m in available %}
+            <option value="{{m}}" {{'selected' if f_model==m}}>{{m}}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="wad-lbl">来源</label>
+          <select name="source" class="form-select wad-ctrl">
+            <option value="">全部</option>
+            {% for v,n in [('single','单条'),('batch','批量'),('api','API')] %}
+            <option value="{{v}}" {{'selected' if f_source==v}}>{{n}}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2 d-flex gap-2">
+          <button type="submit" class="btn wad-btn flex-fill">筛选</button>
+          <a href="{{ url_for('pages.history') }}" class="btn btn-ghost">✕</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="wad-card">
+    <div class="wad-card-hdr d-flex justify-content-between">
+      <span><i class="bi bi-database me-2"></i>记录列表</span>
+      <span style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">共 {{pagination.total}} 条</span>
+    </div>
+    <div class="table-responsive">
+      {% set cn={'norm':'正常流量','sqli':'SQL注入','xss':'XSS攻击','cmdi':'命令注入','path-traversal':'路径穿越'} %}
+      <table class="table wad-table mb-0">
+        <thead><tr><th>ID</th><th>Payload</th><th>结果</th><th>置信度</th><th>模型</th><th>来源</th><th>时间</th><th></th></tr></thead>
+        <tbody>
+          {% for r in pagination.items %}
+          <tr class="{{ 'row-atk' if r.is_attack else '' }}">
+            <td style="font-family:var(--mono);color:var(--muted);font-size:.8rem">#{{r.id}}</td>
+            <td style="font-family:var(--mono);font-size:.82rem;color:#fbbf24;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{r.payload}}">
+              {{ r.payload[:55] }}{% if r.payload|length>55 %}…{% endif %}</td>
+            <td><span class="badge {{r.label_cls}}">{{r.label_cn}}</span></td>
+            <!-- 修改点：替换内联样式为 confidence-text 类 -->
+            <td class="confidence-text">{{ "%.1f"|format(r.confidence*100) }}%</td>
+            <td><span class="badge bg-secondary">{{r.model_used}}</span></td>
+            <td style="font-size:.82rem;color:var(--muted)">{{r.source}}</td>
+            <td style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">{{r.created_at.strftime('%m-%d %H:%M')}}</td>
+            <td>
+              <form method="POST" action="{{ url_for('pages.delete_record',rid=r.id) }}"
+                    onsubmit="return confirm('确认删除？')">
+                <button class="btn btn-sm btn-del"><i class="bi bi-trash3"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-center py-5" style="color:var(--muted)">
+            <i class="bi bi-inbox d-block fs-2 mb-2"></i>暂无记录
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if pagination.pages > 1 %}
+    <div class="d-flex justify-content-center py-3">
+      <nav><ul class="pagination wad-page mb-0">
+        <li class="page-item {{'disabled' if not pagination.has_prev}}">
+          <a class="page-link" href="?page={{pagination.prev_num}}&label={{f_label}}&model={{f_model}}&source={{f_source}}&keyword={{f_kw}}">‹</a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}
+          {% if p %}<li class="page-item {{'active' if p==pagination.page}}">
+            <a class="page-link" href="?page={{p}}&label={{f_label}}&model={{f_model}}&source={{f_source}}&keyword={{f_kw}}">{{p}}</a>
+          </li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+        {% endfor %}
+        <li class="page-item {{'disabled' if not pagination.has_next}}">
+          <a class="page-link" href="?page={{pagination.next_num}}&label={{f_label}}&model={{f_model}}&source={{f_source}}&keyword={{f_kw}}">›</a>
+        </li>
+      </ul></nav>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

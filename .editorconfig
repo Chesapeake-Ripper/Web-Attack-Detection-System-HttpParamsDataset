@@ -1,0 +1,137 @@
+# EditorConfig helps maintain consistent coding styles
+# https://editorconfig.org
+
+root = true
+
+# 所有文件的默认配置
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Python 文件
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 127
+
+# JavaScript 文件
+[*.js]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+
+# TypeScript 文件
+[*.ts]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+
+# HTML 文件
+[*.html]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+
+# CSS 文件
+[*.css]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+
+# JSON 文件
+[*.json]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+
+# YAML 文件
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+
+# Markdown 文件
+[*.md]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+trim_trailing_whitespace = false
+
+# 文本文件
+[*.txt]
+indent_style = space
+indent_size = 4
+max_line_length = 127
+
+# Shell 脚本
+[*.sh]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+
+# Windows 批处理文件
+[*.{bat,cmd}]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+
+# Makefile
+[Makefile]
+indent_style = tab
+indent_size = 4
+
+
+# XML 文件
+[*.xml]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+
+# 配置文件
+[*.{ini,cfg,conf}]
+indent_style = space
+indent_size = 4
+max_line_length = 127
+
+# Git 配置
+[.gitattributes]
+indent_style = tab
+indent_size = 4
+
+# GitHub Actions
+[.github/workflows/*.yml]
+indent_style = space
+indent_size = 2
+max_line_length = 127
+
+# Jupyter Notebook
+[*.ipynb]
+indent_style = space
+indent_size = 1
+max_line_length = 127
+
+# CSV 文件
+[*.csv]
+indent_style = space
+indent_size = 4
+max_line_length = 127
+
+# SQL 文件
+[*.sql]
+indent_style = space
+indent_size = 4
+max_line_length = 127
+
+# 环境变量文件
+[.env*]
+indent_style = space
+indent_size = 4
+max_line_length = 127
+
+# 日志文件
+[*.log]
+indent_style = space
+indent_size = 4
+max_line_length = 127
